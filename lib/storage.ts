@@ -52,7 +52,7 @@ export function saveWorkers(workers: Worker[]): void {
 
 // Shift functions
 export function getShifts(): Shift[] {
-  const shifts = getFromStorage(STORAGE_KEYS.SHIFTS, [])
+  const shifts = getFromStorage<Shift[]>(STORAGE_KEYS.SHIFTS, [])
   // Convert date strings back to Date objects
   return shifts.map((shift) => ({
     ...shift,
@@ -67,7 +67,7 @@ export function saveShifts(shifts: Shift[]): void {
 
 // Reports functions
 export function getReports(): SalesReport[] {
-  const reports = getFromStorage(STORAGE_KEYS.REPORTS, [])
+  const reports = getFromStorage<SalesReport[]>(STORAGE_KEYS.REPORTS, [])
   return reports.map((report) => ({
     ...report,
     date: new Date(report.date),

@@ -29,11 +29,16 @@ export default function InventoryManagement({ onBack }: InventoryManagementProps
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isRestockDialogOpen, setIsRestockDialogOpen] = useState(false)
   const [selectedBeer, setSelectedBeer] = useState<Beer | null>(null)
-  const [newBeer, setNewBeer] = useState({
+  const [newBeer, setNewBeer] = useState<{
+    name: string
+    quantity: number
+    purchasePrice: number
+    weeklyRestockDay: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday"
+  }>({
     name: "",
     quantity: 0,
     purchasePrice: 0,
-    weeklyRestockDay: "monday" as const,
+    weeklyRestockDay: "monday",
   })
 
   useEffect(() => {
@@ -154,7 +159,7 @@ export default function InventoryManagement({ onBack }: InventoryManagementProps
                     <Select
                       value={newBeer.weeklyRestockDay}
                       onValueChange={(value) =>
-                        setNewBeer({ ...newBeer, weeklyRestockDay: value as Beer["weeklyRestockDay"] })
+                        setNewBeer({ ...newBeer, weeklyRestockDay: value as typeof newBeer.weeklyRestockDay })
                       }
                     >
                       <SelectTrigger>
@@ -332,7 +337,10 @@ export default function InventoryManagement({ onBack }: InventoryManagementProps
                 <Select
                   value={selectedBeer.weeklyRestockDay}
                   onValueChange={(value) =>
-                    setSelectedBeer({ ...selectedBeer, weeklyRestockDay: value as Beer["weeklyRestockDay"] })
+                    setSelectedBeer({
+                      ...selectedBeer,
+                      weeklyRestockDay: value as typeof selectedBeer.weeklyRestockDay,
+                    })
                   }
                 >
                   <SelectTrigger>
