@@ -36,6 +36,8 @@ export default function CashCounting({ onBack }: CashCountingProps) {
       "100": 0,
       "50": 0,
     },
+    nequi: 0,
+    billetesVarios: 0,
     total: 0,
   })
 
@@ -55,19 +57,30 @@ export default function CashCounting({ onBack }: CashCountingProps) {
       (sum, [denomination, quantity]) => sum + Number.parseInt(denomination) * quantity,
       0,
     )
-    return billsTotal + coinsTotal
+    return billsTotal + coinsTotal + breakdown.nequi + breakdown.billetesVarios
   }
 
-  const updateCashBreakdown = (type: "bills" | "coins", denomination: string, quantity: number) => {
-    const newBreakdown = {
-      ...cashBreakdown,
-      [type]: {
-        ...cashBreakdown[type],
-        [denomination]: Math.max(0, quantity),
-      },
+  const updateCashBreakdown = (
+    type: "bills" | "coins" | "nequi" | "billetesVarios",
+    denomination: string,
+    quantity: number,
+  ) => {
+    if (type === "nequi" || type === "billetesVarios") {
+      setCashBreakdown({
+        ...cashBreakdown,
+        [type]: Math.max(0, quantity),
+      })
+    } else {
+      const newBreakdown = {
+        ...cashBreakdown,
+        [type]: {
+          ...cashBreakdown[type],
+          [denomination]: Math.max(0, quantity),
+        },
+      }
+      newBreakdown.total = calculateTotal(newBreakdown)
+      setCashBreakdown(newBreakdown)
     }
-    newBreakdown.total = calculateTotal(newBreakdown)
-    setCashBreakdown(newBreakdown)
   }
 
   const handleSaveCashCount = () => {
@@ -101,6 +114,8 @@ export default function CashCounting({ onBack }: CashCountingProps) {
         "100": 0,
         "50": 0,
       },
+      nequi: 0,
+      billetesVarios: 0,
       total: 0,
     })
     setIsCountingDialogOpen(false)
@@ -169,9 +184,12 @@ export default function CashCounting({ onBack }: CashCountingProps) {
           </Card>
 
           <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">Conteos Hoy</CardTitle>
-              <CheckCircle className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Calculator className="h-5 w-5 text-amber-500" />
+                <span>Conteos Hoy</span>
+              </CardTitle>
+              <CardDescription>Conteos completados hoy</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-slate-900 dark:text-white">
@@ -405,6 +423,56 @@ export default function CashCounting({ onBack }: CashCountingProps) {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Nequi Section */}
+              <div>
+                <div className="flex items-center space-x-2 mb-4">
+                  <span className="h-5 w-5 text-blue-600" />
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Nequi</h3>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="nequi" className="text-sm font-medium">
+                      Nequi
+                    </Label>
+                    <Input
+                      id="nequi"
+                      type="number"
+                      min="0"
+                      value={cashBreakdown.nequi}
+                      onChange={(e) => updateCashBreakdown("nequi", "", Number.parseInt(e.target.value) || 0)}
+                      className="text-center"
+                    />
+                    <div className="text-xs text-slate-500 text-center">${cashBreakdown.nequi.toLocaleString()}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Billetes Varios Section */}
+              <div>
+                <div className="flex items-center space-x-2 mb-4">
+                  <span className="h-5 w-5 text-red-600" />
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Billetes Varios</h3>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="billetesVarios" className="text-sm font-medium">
+                      Billetes Varios
+                    </Label>
+                    <Input
+                      id="billetesVarios"
+                      type="number"
+                      min="0"
+                      value={cashBreakdown.billetesVarios}
+                      onChange={(e) => updateCashBreakdown("billetesVarios", "", Number.parseInt(e.target.value) || 0)}
+                      className="text-center"
+                    />
+                    <div className="text-xs text-slate-500 text-center">
+                      ${cashBreakdown.billetesVarios.toLocaleString()}
+                    </div>
+                  </div>
                 </div>
               </div>
 
