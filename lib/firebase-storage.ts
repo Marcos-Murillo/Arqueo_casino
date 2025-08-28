@@ -2,11 +2,6 @@ import { collection, doc, getDocs, setDoc, query, orderBy } from "firebase/fires
 import { db } from "./firebase"
 import type { Beer, Worker, Shift, Casino } from "@/types"
 
-const CASINOS = {
-  spezia: "spezia",
-  cali: "cali-gran-casino",
-}
-
 export const getBeers = async (casinoId: string): Promise<Beer[]> => {
   const beersRef = collection(db, `casinos/${casinoId}/beers`)
   const snapshot = await getDocs(beersRef)

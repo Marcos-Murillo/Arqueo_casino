@@ -15,7 +15,6 @@ interface SalesReportsProps {
 }
 
 export default function SalesReports({ onBack }: SalesReportsProps) {
-  const [shifts, setShifts] = useState<Shift[]>([])
   const [beers, setBeers] = useState<Beer[]>([])
   const [selectedPeriod, setSelectedPeriod] = useState<"today" | "week" | "month" | "all">("today")
   const [reports, setReports] = useState<SalesReport[]>([])
@@ -23,7 +22,6 @@ export default function SalesReports({ onBack }: SalesReportsProps) {
   useEffect(() => {
     const allShifts = getShifts()
     const allBeers = getBeers()
-    setShifts(allShifts)
     setBeers(allBeers)
     generateReports(allShifts, allBeers)
   }, [])
@@ -151,7 +149,10 @@ export default function SalesReports({ onBack }: SalesReportsProps) {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <Select value={selectedPeriod} onValueChange={(value: any) => setSelectedPeriod(value)}>
+              <Select
+                value={selectedPeriod}
+                onValueChange={(value: "today" | "week" | "month" | "all") => setSelectedPeriod(value)}
+              >
                 <SelectTrigger className="w-40">
                   <SelectValue />
                 </SelectTrigger>
