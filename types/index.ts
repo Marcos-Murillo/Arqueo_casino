@@ -7,6 +7,7 @@ export interface Beer {
   purchasePrice: number // Variable purchase price
   sellingPrice: number // Fixed at 4000 pesos
   lastRestockDate: Date
+  lastRestockWorker?: string // Added lastRestockWorker property
   weeklyRestockDay: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday"
 }
 
@@ -27,9 +28,14 @@ export interface Shift {
   initialInventory: Record<string, number> // beerId -> quantity
   finalInventory?: Record<string, number>
   beersSold?: Record<string, number>
+  freeBeersSold?: Record<string, number> // Free beers given away
+  bonuses?: number // Bonuses amount
+  prizes?: number // Prizes amount
   expectedCash?: number
   actualCash?: number
   cashBreakdown?: CashBreakdown
+  restockDuringShift?: boolean
+  restockDetails?: string
 }
 
 export interface CashBreakdown {
@@ -42,15 +48,11 @@ export interface CashBreakdown {
     "2000": number // 2,000 peso bills
     "1000": number // 1,000 peso bills
   }
-  coins: {
-    "1000": number // 1,000 peso coins
-    "500": number // 500 peso coins
-    "200": number // 200 peso coins
-    "100": number // 100 peso coins
-    "50": number // 50 peso coins
-  }
+  coins: number // Total coins amount
   nequi: number // Nequi digital money
   billetesVarios: number // Various bills
+  bonuses: number // Bonuses amount
+  prizes: number // Prizes amount
   total: number
 }
 
@@ -64,8 +66,32 @@ export interface SalesReport {
   shiftId: string
   workerName: string
   beersSold: Record<string, number>
+  freeBeersSold?: Record<string, number>
+  bonuses?: number
+  prizes?: number
   totalRevenue: number
   totalCost: number
   profit: number
   cashDifference: number // actualCash - expectedCash
+}
+
+export interface SoftDrink {
+  id: string
+  name: string
+  quantity: number
+  cost: number
+  lastRestockDate: Date
+}
+
+export interface RestockRecord {
+  id: string
+  date: Date
+  workerName: string
+  beerId: string
+  beerName: string
+  quantityAdded: number
+  newTotalQuantity: number
+  type: "beer" | "softdrink" // Added type property
+  duringActiveShift?: boolean
+  shiftId?: string
 }

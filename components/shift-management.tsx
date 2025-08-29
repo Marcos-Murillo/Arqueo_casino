@@ -15,15 +15,29 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Clock, Play, Square, ArrowLeft, User, Calendar, AlertCircle, Banknote, Coins, DollarSign } from "lucide-react"
-import { getShifts, saveShifts, getWorkers, getBeers, saveBeers } from "@/lib/storage"
+import {
+  Clock,
+  Play,
+  Square,
+  ArrowLeft,
+  User,
+  Calendar,
+  AlertCircle,
+  Banknote,
+  DollarSign,
+  Save,
+  Gift,
+  Award,
+} from "lucide-react"
+import { loadShifts, saveShifts, loadWorkers, loadBeers, saveBeers } from "@/lib/firebase-storage"
 import type { Shift, Worker, Beer, CashBreakdown } from "@/types"
 
 interface ShiftManagementProps {
+  selectedCasino: string
   onBack: () => void
 }
 
-export default function ShiftManagement({ onBack }: ShiftManagementProps) {
+export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagementProps) {
   const [shifts, setShifts] = useState<Shift[]>([])
   const [workers, setWorkers] = useState<Worker[]>([])
   const [beers, setBeers] = useState<Beer[]>([])
@@ -32,6 +46,10 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null)
   const [selectedWorkerId, setSelectedWorkerId] = useState("")
   const [salesData, setSalesData] = useState<Record<string, number>>({})
+  const [freeBeerData, setFreeBeerData] = useState<Record<string, number>>({})
+  const [bonuses, setBonuses] = useState(0)
+  const [prizes, setPrizes] = useState(0)
+  const [savedProgress, setSavedProgress] = useState<any>(null)
   const [cashBreakdown, setCashBreakdown] = useState<CashBreakdown>({
     bills: {
       "100000": 0,
@@ -42,40 +60,47 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
       "2000": 0,
       "1000": 0,
     },
-    coins: {
-      "1000": 0,
-      "500": 0,
-      "200": 0,
-      "100": 0,
-      "50": 0,
-    },
+    coins: 0, // Changed to single number instead of object
     nequi: 0,
     billetesVarios: 0,
+    bonuses: 0,
+    prizes: 0,
     total: 0,
   })
 
   useEffect(() => {
-    setShifts(getShifts())
-    setWorkers(getWorkers())
-    setBeers(getBeers())
-  }, [])
+    loadData()
+  }, [selectedCasino])
+
+  const loadData = async () => {
+    try {
+      const [shiftsData, workersData, beersData] = await Promise.all([
+        loadShifts(selectedCasino),
+        loadWorkers(selectedCasino),
+        loadBeers(selectedCasino),
+      ])
+      setShifts(shiftsData)
+      setWorkers(workersData)
+      setBeers(beersData)
+    } catch (error) {
+      console.error("Error loading data:", error)
+    }
+  }
 
   const activeShifts = shifts.filter((shift) => shift.isActive)
-  const completedShifts = shifts.filter((shift) => !shift.isActive).slice(0, 10) // Show last 10 completed shifts
+  const completedShifts = shifts.filter((shift) => !shift.isActive).slice(0, 10)
 
   const calculateTotal = (breakdown: CashBreakdown) => {
     const billsTotal = Object.entries(breakdown.bills).reduce(
       (sum, [denomination, quantity]) => sum + Number.parseInt(denomination) * quantity,
       0,
     )
-    const coinsTotal = Object.entries(breakdown.coins).reduce(
-      (sum, [denomination, quantity]) => sum + Number.parseInt(denomination) * quantity,
-      0,
+    return (
+      billsTotal + breakdown.coins + breakdown.nequi + breakdown.billetesVarios + breakdown.bonuses + breakdown.prizes
     )
-    return billsTotal + coinsTotal + breakdown.nequi + breakdown.billetesVarios
   }
 
-  const updateCashBreakdown = (type: "bills" | "coins", denomination: string, quantity: number) => {
+  const updateCashBreakdown = (type: "bills", denomination: string, quantity: number) => {
     const newBreakdown = {
       ...cashBreakdown,
       [type]: {
@@ -87,16 +112,43 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
     setCashBreakdown(newBreakdown)
   }
 
-  const handleStartShift = () => {
+  const saveProgress = () => {
+    const progress = {
+      salesData,
+      freeBeerData,
+      bonuses,
+      prizes,
+      cashBreakdown,
+      shiftId: selectedShift?.id,
+    }
+    setSavedProgress(progress)
+    localStorage.setItem(`shift_progress_${selectedCasino}_${selectedShift?.id}`, JSON.stringify(progress))
+    alert("Progreso guardado exitosamente")
+  }
+
+  const loadSavedProgress = (shiftId: string) => {
+    const saved = localStorage.getItem(`shift_progress_${selectedCasino}_${shiftId}`)
+    if (saved) {
+      const progress = JSON.parse(saved)
+      setSalesData(progress.salesData || {})
+      setFreeBeerData(progress.freeBeerData || {})
+      setBonuses(progress.bonuses || 0)
+      setPrizes(progress.prizes || 0)
+      setCashBreakdown(progress.cashBreakdown || cashBreakdown)
+    }
+  }
+
+  const handleStartShift = async () => {
     if (!selectedWorkerId) return
 
     const worker = workers.find((w) => w.id === selectedWorkerId)
     if (!worker) return
 
-    // Create initial inventory snapshot
     const initialInventory: Record<string, number> = {}
+    let totalInitialInventory = 0
     beers.forEach((beer) => {
       initialInventory[beer.id] = beer.quantity
+      totalInitialInventory += beer.quantity
     })
 
     const newShift: Shift = {
@@ -110,31 +162,40 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
 
     const updatedShifts = [...shifts, newShift]
     setShifts(updatedShifts)
-    saveShifts(updatedShifts)
+    await saveShifts(selectedCasino, updatedShifts)
     setSelectedWorkerId("")
     setIsStartShiftDialogOpen(false)
   }
 
-  const handleEndShift = () => {
+  const handleEndShift = async () => {
     if (!selectedShift) return
 
-    // Calculate final inventory and sales
     const finalInventory: Record<string, number> = {}
     const beersSold: Record<string, number> = {}
+    const freeBeersSold: Record<string, number> = {}
     let expectedCash = 0
 
     beers.forEach((beer) => {
       const initialQty = selectedShift.initialInventory[beer.id] || 0
       const soldQty = salesData[beer.id] || 0
-      const finalQty = initialQty - soldQty
+      const freeQty = freeBeerData[beer.id] || 0
+      const finalQty = initialQty - soldQty - freeQty
 
       finalInventory[beer.id] = finalQty
       beersSold[beer.id] = soldQty
+      freeBeersSold[beer.id] = freeQty
       expectedCash += soldQty * beer.sellingPrice
 
       // Update beer inventory
       beer.quantity = finalQty
     })
+
+    const updatedCashBreakdown = {
+      ...cashBreakdown,
+      bonuses,
+      prizes,
+      total: calculateTotal({ ...cashBreakdown, bonuses, prizes }),
+    }
 
     const updatedShift: Shift = {
       ...selectedShift,
@@ -142,18 +203,26 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
       isActive: false,
       finalInventory,
       beersSold,
+      freeBeersSold,
+      bonuses,
+      prizes,
       expectedCash,
-      actualCash: cashBreakdown.total,
-      cashBreakdown,
+      actualCash: updatedCashBreakdown.total,
+      cashBreakdown: updatedCashBreakdown,
     }
 
     const updatedShifts = shifts.map((shift) => (shift.id === selectedShift.id ? updatedShift : shift))
 
     setShifts(updatedShifts)
-    saveShifts(updatedShifts)
-    saveBeers(beers) // Update beer inventory
+    await Promise.all([saveShifts(selectedCasino, updatedShifts), saveBeers(selectedCasino, beers)])
+
+    localStorage.removeItem(`shift_progress_${selectedCasino}_${selectedShift.id}`)
+
     setSelectedShift(null)
     setSalesData({})
+    setFreeBeerData({})
+    setBonuses(0)
+    setPrizes(0)
     setCashBreakdown({
       bills: {
         "100000": 0,
@@ -164,15 +233,11 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
         "2000": 0,
         "1000": 0,
       },
-      coins: {
-        "1000": 0,
-        "500": 0,
-        "200": 0,
-        "100": 0,
-        "50": 0,
-      },
+      coins: 0,
       nequi: 0,
       billetesVarios: 0,
+      bonuses: 0,
+      prizes: 0,
       total: 0,
     })
     setIsEndShiftDialogOpen(false)
@@ -182,6 +247,13 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
     const endTime = end || new Date()
     const duration = Math.floor((endTime.getTime() - start.getTime()) / (1000 * 60 * 60))
     return `${duration}h`
+  }
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString("es-CO", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })
   }
 
   return (
@@ -235,12 +307,20 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                   <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
                     <div className="text-sm text-blue-800 dark:text-blue-200">
                       <div className="font-medium mb-2">Inventario inicial será registrado:</div>
-                      {beers.map((beer) => (
-                        <div key={beer.id} className="flex justify-between">
-                          <span>{beer.name}:</span>
-                          <span>{beer.quantity} unidades</span>
+                      <div className="space-y-1">
+                        {beers.map((beer) => (
+                          <div key={beer.id} className="flex justify-between">
+                            <span>{beer.name}:</span>
+                            <span>{beer.quantity} unidades</span>
+                          </div>
+                        ))}
+                        <div className="border-t pt-2 mt-2 font-semibold">
+                          <div className="flex justify-between">
+                            <span>Total inicial:</span>
+                            <span>{beers.reduce((sum, beer) => sum + beer.quantity, 0)} unidades</span>
+                          </div>
                         </div>
-                      ))}
+                      </div>
                     </div>
                   </div>
                   <Button
@@ -330,13 +410,9 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                           En Curso
                         </Badge>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-2 text-sm text-slate-600 dark:text-slate-400">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2 text-sm text-slate-600 dark:text-slate-400">
                         <div>
-                          <span className="font-medium">Inicio:</span>{" "}
-                          {shift.startTime.toLocaleTimeString("es-CO", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          <span className="font-medium">Entrada:</span> {formatTime(shift.startTime)}
                         </div>
                         <div>
                           <span className="font-medium">Duración:</span> {formatDuration(shift.startTime)}
@@ -345,6 +421,11 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                           <span className="font-medium">Inventario Inicial:</span>{" "}
                           {Object.values(shift.initialInventory).reduce((sum, qty) => sum + qty, 0)} unidades
                         </div>
+                        {shift.restockDuringShift && (
+                          <div className="text-amber-600">
+                            <span className="font-medium">⚠️ Reabastecido durante turno</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <Button
@@ -353,10 +434,16 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                       onClick={() => {
                         setSelectedShift(shift)
                         const initialSalesData: Record<string, number> = {}
+                        const initialFreeBeerData: Record<string, number> = {}
                         beers.forEach((beer) => {
                           initialSalesData[beer.id] = 0
+                          initialFreeBeerData[beer.id] = 0
                         })
                         setSalesData(initialSalesData)
+                        setFreeBeerData(initialFreeBeerData)
+                        setBonuses(0)
+                        setPrizes(0)
+                        loadSavedProgress(shift.id)
                         setIsEndShiftDialogOpen(true)
                       }}
                       className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
@@ -389,9 +476,15 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                       <h3 className="font-semibold text-slate-900 dark:text-white">{shift.workerName}</h3>
                       <Badge variant="secondary">Completado</Badge>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2 text-sm text-slate-600 dark:text-slate-400">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-2 text-sm text-slate-600 dark:text-slate-400">
                       <div>
                         <span className="font-medium">Fecha:</span> {shift.startTime.toLocaleDateString("es-CO")}
+                      </div>
+                      <div>
+                        <span className="font-medium">Entrada:</span> {formatTime(shift.startTime)}
+                      </div>
+                      <div>
+                        <span className="font-medium">Salida:</span> {shift.endTime ? formatTime(shift.endTime) : "N/A"}
                       </div>
                       <div>
                         <span className="font-medium">Duración:</span>{" "}
@@ -400,10 +493,6 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                       <div>
                         <span className="font-medium">Cervezas Vendidas:</span>{" "}
                         {shift.beersSold ? Object.values(shift.beersSold).reduce((sum, qty) => sum + qty, 0) : 0}
-                      </div>
-                      <div>
-                        <span className="font-medium">Efectivo Esperado:</span> $
-                        {shift.expectedCash?.toLocaleString() || 0}
                       </div>
                     </div>
                   </div>
@@ -421,9 +510,9 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
 
       {/* End Shift Dialog */}
       <Dialog open={isEndShiftDialogOpen} onOpenChange={setIsEndShiftDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Finalizar Turno</DialogTitle>
+            <DialogTitle>Finalizar Turno - Arqueo Completo</DialogTitle>
             <DialogDescription>
               Registra las ventas y cuenta el efectivo del turno de {selectedShift?.workerName}
             </DialogDescription>
@@ -435,8 +524,12 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                   <div className="font-medium mb-2">Información del Turno:</div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>Trabajador: {selectedShift.workerName}</div>
-                    <div>Inicio: {selectedShift.startTime.toLocaleString("es-CO")}</div>
+                    <div>Entrada: {formatTime(selectedShift.startTime)}</div>
                     <div>Duración: {formatDuration(selectedShift.startTime)}</div>
+                    <div>
+                      Total Inicial: {Object.values(selectedShift.initialInventory).reduce((sum, qty) => sum + qty, 0)}{" "}
+                      unidades
+                    </div>
                   </div>
                 </div>
               </div>
@@ -447,7 +540,8 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                   {beers.map((beer) => {
                     const initialQty = selectedShift.initialInventory[beer.id] || 0
                     const soldQty = salesData[beer.id] || 0
-                    const remainingQty = initialQty - soldQty
+                    const freeQty = freeBeerData[beer.id] || 0
+                    const remainingQty = initialQty - soldQty - freeQty
 
                     return (
                       <div key={beer.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
@@ -455,7 +549,7 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                           <h4 className="font-medium text-slate-900 dark:text-white">{beer.name}</h4>
                           <Badge variant="outline">Stock inicial: {initialQty}</Badge>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                           <div>
                             <Label htmlFor={`sold-${beer.id}`}>Cervezas Vendidas</Label>
                             <Input
@@ -468,6 +562,22 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                                 setSalesData({
                                   ...salesData,
                                   [beer.id]: Math.min(Number.parseInt(e.target.value) || 0, initialQty),
+                                })
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor={`free-${beer.id}`}>Cervezas Regaladas</Label>
+                            <Input
+                              id={`free-${beer.id}`}
+                              type="number"
+                              min="0"
+                              max={initialQty - soldQty}
+                              value={freeQty}
+                              onChange={(e) =>
+                                setFreeBeerData({
+                                  ...freeBeerData,
+                                  [beer.id]: Math.min(Number.parseInt(e.target.value) || 0, initialQty - soldQty),
                                 })
                               }
                             />
@@ -488,6 +598,37 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                       </div>
                     )
                   })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="bonuses" className="text-base font-medium flex items-center">
+                    <Award className="h-4 w-4 mr-2" />
+                    Bonos
+                  </Label>
+                  <Input
+                    id="bonuses"
+                    type="number"
+                    min="0"
+                    value={bonuses}
+                    onChange={(e) => setBonuses(Number.parseInt(e.target.value) || 0)}
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="prizes" className="text-base font-medium flex items-center">
+                    <Gift className="h-4 w-4 mr-2" />
+                    Premios
+                  </Label>
+                  <Input
+                    id="prizes"
+                    type="number"
+                    min="0"
+                    value={prizes}
+                    onChange={(e) => setPrizes(Number.parseInt(e.target.value) || 0)}
+                    placeholder="0"
+                  />
                 </div>
               </div>
 
@@ -527,37 +668,31 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                   </div>
                 </div>
 
-                {/* Coins Section */}
                 <div className="mb-6">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <Coins className="h-5 w-5 text-amber-600" />
-                    <h4 className="text-base font-medium text-slate-900 dark:text-white">Monedas</h4>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    {Object.entries(cashBreakdown.coins).map(([denomination, quantity]) => (
-                      <div key={denomination} className="space-y-2">
-                        <Label htmlFor={`coin-${denomination}`} className="text-sm font-medium">
-                          ${Number.parseInt(denomination).toLocaleString()}
-                        </Label>
-                        <Input
-                          id={`coin-${denomination}`}
-                          type="number"
-                          min="0"
-                          value={quantity}
-                          onChange={(e) =>
-                            updateCashBreakdown("coins", denomination, Number.parseInt(e.target.value) || 0)
-                          }
-                          className="text-center"
-                        />
-                        <div className="text-xs text-slate-500 text-center">
-                          ${(Number.parseInt(denomination) * quantity).toLocaleString()}
-                        </div>
-                      </div>
-                    ))}
+                  <div className="space-y-2">
+                    <Label htmlFor="coins" className="text-base font-medium">
+                      Monedas (Total)
+                    </Label>
+                    <Input
+                      id="coins"
+                      type="number"
+                      min="0"
+                      value={cashBreakdown.coins}
+                      onChange={(e) => {
+                        const newBreakdown = {
+                          ...cashBreakdown,
+                          coins: Number.parseInt(e.target.value) || 0,
+                        }
+                        newBreakdown.total = calculateTotal(newBreakdown)
+                        setCashBreakdown(newBreakdown)
+                      }}
+                      className="text-center"
+                      placeholder="0"
+                    />
                   </div>
                 </div>
 
-                {/* Nequi and Billetes Varios Section */}
+                {/* Other Payment Methods */}
                 <div className="mb-6">
                   <div className="flex items-center space-x-2 mb-4">
                     <DollarSign className="h-5 w-5 text-blue-600" />
@@ -584,7 +719,6 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                         className="text-center"
                         placeholder="0"
                       />
-                      <div className="text-xs text-slate-500 text-center">${cashBreakdown.nequi.toLocaleString()}</div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="billetes-varios" className="text-sm font-medium">
@@ -606,9 +740,6 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                         className="text-center"
                         placeholder="0"
                       />
-                      <div className="text-xs text-slate-500 text-center">
-                        ${cashBreakdown.billetesVarios.toLocaleString()}
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -620,32 +751,35 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                   <div className="font-medium mb-2">Resumen del Turno:</div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>Total vendido: {Object.values(salesData).reduce((sum, qty) => sum + qty, 0)} cervezas</div>
+                    <div>Total regalado: {Object.values(freeBeerData).reduce((sum, qty) => sum + qty, 0)} cervezas</div>
+                    <div>Bonos: ${bonuses.toLocaleString()}</div>
+                    <div>Premios: ${prizes.toLocaleString()}</div>
                     <div>
                       Efectivo esperado: $
                       {beers
                         .reduce((sum, beer) => sum + (salesData[beer.id] || 0) * beer.sellingPrice, 0)
                         .toLocaleString()}
                     </div>
-                    <div>Total contado: ${cashBreakdown.total.toLocaleString()}</div>
-                    <div>Base requerida: $10,000,000</div>
+                    <div>Total contado: ${calculateTotal({ ...cashBreakdown, bonuses, prizes }).toLocaleString()}</div>
                   </div>
 
                   {/* Base Amount Comparison */}
                   <div className="mt-4 p-3 rounded-lg border-2 border-dashed">
                     {(() => {
                       const baseAmount = 10000000
-                      const difference = cashBreakdown.total - baseAmount
+                      const totalCounted = calculateTotal({ ...cashBreakdown, bonuses, prizes })
+                      const difference = totalCounted - baseAmount
 
                       if (difference === 0) {
                         return (
                           <div className="text-green-600 dark:text-green-400 font-medium text-center">
-                            ✓ Cantidad exacta en base
+                            ✓ Cantidad exacta en base: $10,000,000
                           </div>
                         )
                       } else if (difference < 0) {
                         return (
                           <div className="text-red-600 dark:text-red-400 font-medium text-center">
-                            ⚠️ Hace falta dinero: ${Math.abs(difference).toLocaleString()}
+                            Hace falta dinero: ${Math.abs(difference).toLocaleString()}
                           </div>
                         )
                       } else {
@@ -657,45 +791,25 @@ export default function ShiftManagement({ onBack }: ShiftManagementProps) {
                       }
                     })()}
                   </div>
-
-                  <div className="mt-2">
-                    <div>
-                      Diferencia vs esperado:{" "}
-                      <span
-                        className={
-                          cashBreakdown.total ===
-                          beers.reduce((sum, beer) => sum + (salesData[beer.id] || 0) * beer.sellingPrice, 0)
-                            ? "text-green-600 dark:text-green-400"
-                            : cashBreakdown.total >
-                                beers.reduce((sum, beer) => sum + (salesData[beer.id] || 0) * beer.sellingPrice, 0)
-                              ? "text-blue-600 dark:text-blue-400"
-                              : "text-red-600 dark:text-red-400"
-                        }
-                      >
-                        {(() => {
-                          const expected = beers.reduce(
-                            (sum, beer) => sum + (salesData[beer.id] || 0) * beer.sellingPrice,
-                            0,
-                          )
-                          return cashBreakdown.total === expected
-                            ? "Exacto"
-                            : cashBreakdown.total > expected
-                              ? `+$${(cashBreakdown.total - expected).toLocaleString()}`
-                              : `-$${(expected - cashBreakdown.total).toLocaleString()}`
-                        })()}
-                      </span>
-                    </div>
-                  </div>
                 </div>
               </div>
 
               <div className="flex space-x-2">
                 <Button
+                  onClick={saveProgress}
+                  variant="outline"
+                  className="flex-1 bg-amber-50 hover:bg-amber-100 border-amber-200"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Guardar Avances de Arqueo
+                </Button>
+                <Button
                   onClick={handleEndShift}
                   disabled={Object.values(salesData).some((qty, index) => {
                     const beer = beers[index]
                     const initialQty = selectedShift.initialInventory[beer.id] || 0
-                    return qty > initialQty
+                    const freeQty = freeBeerData[beer.id] || 0
+                    return qty + freeQty > initialQty
                   })}
                   className="flex-1 bg-red-500 hover:bg-red-600 text-white"
                 >

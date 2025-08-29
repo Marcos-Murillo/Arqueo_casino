@@ -8,7 +8,7 @@ interface CasinoSelectorProps {
   onCasinoSelect: (casinoId: string) => void
 }
 
-export default function CasinoSelector({ onCasinoSelect }: CasinoSelectorProps) {
+export function CasinoSelector({ onCasinoSelect }: CasinoSelectorProps) {
   const casinos: Casino[] = [
     { id: "spezia", name: "Spezia" },
     { id: "cali-gran-casino", name: "Cali Gran Casino" },

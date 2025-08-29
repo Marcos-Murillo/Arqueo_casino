@@ -29,15 +29,11 @@ export default function CashCounting({ onBack }: CashCountingProps) {
       "2000": 0,
       "1000": 0,
     },
-    coins: {
-      "1000": 0,
-      "500": 0,
-      "200": 0,
-      "100": 0,
-      "50": 0,
-    },
+    coins: 0,
     nequi: 0,
     billetesVarios: 0,
+    bonuses: 0,
+    prizes: 0,
     total: 0,
   })
 
@@ -53,23 +49,23 @@ export default function CashCounting({ onBack }: CashCountingProps) {
       (sum, [denomination, quantity]) => sum + Number.parseInt(denomination) * quantity,
       0,
     )
-    const coinsTotal = Object.entries(breakdown.coins).reduce(
-      (sum, [denomination, quantity]) => sum + Number.parseInt(denomination) * quantity,
-      0,
+    return (
+      billsTotal + breakdown.coins + breakdown.nequi + breakdown.billetesVarios + breakdown.bonuses + breakdown.prizes
     )
-    return billsTotal + coinsTotal + breakdown.nequi + breakdown.billetesVarios
   }
 
   const updateCashBreakdown = (
-    type: "bills" | "coins" | "nequi" | "billetesVarios",
+    type: "bills" | "coins" | "nequi" | "billetesVarios" | "bonuses" | "prizes",
     denomination: string,
     quantity: number,
   ) => {
-    if (type === "nequi" || type === "billetesVarios") {
-      setCashBreakdown({
+    if (type === "nequi" || type === "billetesVarios" || type === "coins" || type === "bonuses" || type === "prizes") {
+      const newBreakdown = {
         ...cashBreakdown,
         [type]: Math.max(0, quantity),
-      })
+      }
+      newBreakdown.total = calculateTotal(newBreakdown)
+      setCashBreakdown(newBreakdown)
     } else {
       const newBreakdown = {
         ...cashBreakdown,
@@ -107,15 +103,11 @@ export default function CashCounting({ onBack }: CashCountingProps) {
         "2000": 0,
         "1000": 0,
       },
-      coins: {
-        "1000": 0,
-        "500": 0,
-        "200": 0,
-        "100": 0,
-        "50": 0,
-      },
+      coins: 0,
       nequi: 0,
       billetesVarios: 0,
+      bonuses: 0,
+      prizes: 0,
       total: 0,
     })
     setIsCountingDialogOpen(false)
@@ -192,16 +184,49 @@ export default function CashCounting({ onBack }: CashCountingProps) {
               <CardDescription>Conteos completados hoy</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-slate-900 dark:text-white">
-                {
-                  completedShifts.filter((shift) => {
-                    const today = new Date()
-                    const shiftDate = shift.endTime ? new Date(shift.endTime) : new Date()
-                    return shiftDate.toDateString() === today.toDateString()
-                  }).length
-                }
+              <div className="space-y-4">
+                {activeShifts.map((shift) => (
+                  <div
+                    key={shift.id}
+                    className="flex items-center justify-between p-4 border border-slate-200 dark:border-slate-700 rounded-lg bg-amber-50 dark:bg-amber-900/10"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3">
+                        <h3 className="font-semibold text-slate-900 dark:text-white">{shift.workerName}</h3>
+                        <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                          Pendiente
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2 text-sm text-slate-600 dark:text-slate-400">
+                        <div>
+                          <span className="font-medium">Turno:</span> {shift.startTime.toLocaleDateString("es-CO")}
+                        </div>
+                        <div>
+                          <span className="font-medium">Cervezas Vendidas:</span>{" "}
+                          {shift.beersSold ? Object.values(shift.beersSold).reduce((sum, qty) => sum + qty, 0) : 0}
+                        </div>
+                        <div>
+                          <span className="font-medium">Efectivo Esperado:</span> $
+                          {shift.expectedCash?.toLocaleString() || 0}
+                        </div>
+                        <div>
+                          <span className="font-medium">Estado:</span> Finalizado
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={() => {
+                        setSelectedShift(shift)
+                        setIsCountingDialogOpen(true)
+                      }}
+                      className="bg-green-500 hover:bg-green-600 text-white"
+                    >
+                      <Calculator className="h-4 w-4 mr-2" />
+                      Contar Efectivo
+                    </Button>
+                  </div>
+                ))}
               </div>
-              <p className="text-xs text-slate-600 dark:text-slate-400">conteos completados hoy</p>
             </CardContent>
           </Card>
         </div>
@@ -402,27 +427,21 @@ export default function CashCounting({ onBack }: CashCountingProps) {
                   <Coins className="h-5 w-5 text-amber-600" />
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Monedas</h3>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  {Object.entries(cashBreakdown.coins).map(([denomination, quantity]) => (
-                    <div key={denomination} className="space-y-2">
-                      <Label htmlFor={`coin-${denomination}`} className="text-sm font-medium">
-                        ${Number.parseInt(denomination).toLocaleString()}
-                      </Label>
-                      <Input
-                        id={`coin-${denomination}`}
-                        type="number"
-                        min="0"
-                        value={quantity}
-                        onChange={(e) =>
-                          updateCashBreakdown("coins", denomination, Number.parseInt(e.target.value) || 0)
-                        }
-                        className="text-center"
-                      />
-                      <div className="text-xs text-slate-500 text-center">
-                        ${(Number.parseInt(denomination) * quantity).toLocaleString()}
-                      </div>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="coins" className="text-sm font-medium">
+                      Total Monedas
+                    </Label>
+                    <Input
+                      id="coins"
+                      type="number"
+                      min="0"
+                      value={cashBreakdown.coins}
+                      onChange={(e) => updateCashBreakdown("coins", "", Number.parseInt(e.target.value) || 0)}
+                      className="text-center"
+                    />
+                    <div className="text-xs text-slate-500 text-center">${cashBreakdown.coins.toLocaleString()}</div>
+                  </div>
                 </div>
               </div>
 
@@ -472,6 +491,54 @@ export default function CashCounting({ onBack }: CashCountingProps) {
                     <div className="text-xs text-slate-500 text-center">
                       ${cashBreakdown.billetesVarios.toLocaleString()}
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bonuses Section */}
+              <div>
+                <div className="flex items-center space-x-2 mb-4">
+                  <span className="h-5 w-5 text-purple-600" />
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Bonos</h3>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="bonuses" className="text-sm font-medium">
+                      Bonos
+                    </Label>
+                    <Input
+                      id="bonuses"
+                      type="number"
+                      min="0"
+                      value={cashBreakdown.bonuses}
+                      onChange={(e) => updateCashBreakdown("bonuses", "", Number.parseInt(e.target.value) || 0)}
+                      className="text-center"
+                    />
+                    <div className="text-xs text-slate-500 text-center">${cashBreakdown.bonuses.toLocaleString()}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Prizes Section */}
+              <div>
+                <div className="flex items-center space-x-2 mb-4">
+                  <span className="h-5 w-5 text-orange-600" />
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Premios</h3>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="prizes" className="text-sm font-medium">
+                      Premios
+                    </Label>
+                    <Input
+                      id="prizes"
+                      type="number"
+                      min="0"
+                      value={cashBreakdown.prizes}
+                      onChange={(e) => updateCashBreakdown("prizes", "", Number.parseInt(e.target.value) || 0)}
+                      className="text-center"
+                    />
+                    <div className="text-xs text-slate-500 text-center">${cashBreakdown.prizes.toLocaleString()}</div>
                   </div>
                 </div>
               </div>

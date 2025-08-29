@@ -26,25 +26,38 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Users, ArrowLeft, Plus, Edit, Trash2, UserCheck, UserX, Clock } from "lucide-react"
-import { getWorkers, saveWorkers, getShifts } from "@/lib/storage"
+import { getWorkers, saveWorker, getShifts } from "@/lib/firebase-storage"
 import type { Worker, Shift } from "@/types"
 
 interface StaffManagementProps {
+  selectedCasino: string
   onBack: () => void
 }
 
-export default function StaffManagement({ onBack }: StaffManagementProps) {
+export default function StaffManagement({ selectedCasino, onBack }: StaffManagementProps) {
   const [workers, setWorkers] = useState<Worker[]>([])
   const [shifts, setShifts] = useState<Shift[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null)
   const [newWorkerName, setNewWorkerName] = useState("")
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    setWorkers(getWorkers())
-    setShifts(getShifts())
-  }, [])
+    const loadData = async () => {
+      try {
+        setLoading(true)
+        const [workersData, shiftsData] = await Promise.all([getWorkers(selectedCasino), getShifts(selectedCasino)])
+        setWorkers(workersData)
+        setShifts(shiftsData)
+      } catch (error) {
+        console.error("Error loading staff data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadData()
+  }, [selectedCasino])
 
   const activeWorkers = workers.filter((worker) => worker.isActive)
   const inactiveWorkers = workers.filter((worker) => !worker.isActive)
@@ -72,7 +85,7 @@ export default function StaffManagement({ onBack }: StaffManagementProps) {
     }
   }
 
-  const handleAddWorker = () => {
+  const handleAddWorker = async () => {
     if (!newWorkerName.trim()) return
 
     const newWorker: Worker = {
@@ -82,48 +95,80 @@ export default function StaffManagement({ onBack }: StaffManagementProps) {
       createdAt: new Date(),
     }
 
-    const updatedWorkers = [...workers, newWorker]
-    setWorkers(updatedWorkers)
-    saveWorkers(updatedWorkers)
-    setNewWorkerName("")
-    setIsAddDialogOpen(false)
+    try {
+      await saveWorker(selectedCasino, newWorker)
+      const updatedWorkers = [...workers, newWorker]
+      setWorkers(updatedWorkers)
+      setNewWorkerName("")
+      setIsAddDialogOpen(false)
+    } catch (error) {
+      console.error("Error adding worker:", error)
+    }
   }
 
-  const handleEditWorker = () => {
+  const handleEditWorker = async () => {
     if (!selectedWorker || !selectedWorker.name.trim()) return
 
-    const updatedWorkers = workers.map((worker) => (worker.id === selectedWorker.id ? selectedWorker : worker))
-    setWorkers(updatedWorkers)
-    saveWorkers(updatedWorkers)
-    setSelectedWorker(null)
-    setIsEditDialogOpen(false)
+    try {
+      await saveWorker(selectedCasino, selectedWorker)
+      const updatedWorkers = workers.map((worker) => (worker.id === selectedWorker.id ? selectedWorker : worker))
+      setWorkers(updatedWorkers)
+      setSelectedWorker(null)
+      setIsEditDialogOpen(false)
+    } catch (error) {
+      console.error("Error updating worker:", error)
+    }
   }
 
-  const handleToggleWorkerStatus = (workerId: string) => {
-    const updatedWorkers = workers.map((worker) =>
-      worker.id === workerId ? { ...worker, isActive: !worker.isActive } : worker,
-    )
-    setWorkers(updatedWorkers)
-    saveWorkers(updatedWorkers)
+  const handleToggleWorkerStatus = async (workerId: string) => {
+    const worker = workers.find((w) => w.id === workerId)
+    if (!worker) return
+
+    const updatedWorker = { ...worker, isActive: !worker.isActive }
+
+    try {
+      await saveWorker(selectedCasino, updatedWorker)
+      const updatedWorkers = workers.map((w) => (w.id === workerId ? updatedWorker : w))
+      setWorkers(updatedWorkers)
+    } catch (error) {
+      console.error("Error updating worker status:", error)
+    }
   }
 
-  const handleDeleteWorker = (workerId: string) => {
+  const handleDeleteWorker = async (workerId: string) => {
     // Check if worker has any shifts
     const workerShifts = shifts.filter((shift) => shift.workerId === workerId)
     if (workerShifts.length > 0) {
       // Don't actually delete, just deactivate
-      handleToggleWorkerStatus(workerId)
+      await handleToggleWorkerStatus(workerId)
     } else {
-      // Safe to delete if no shifts
-      const updatedWorkers = workers.filter((worker) => worker.id !== workerId)
-      setWorkers(updatedWorkers)
-      saveWorkers(updatedWorkers)
+      // Safe to delete if no shifts - for now just deactivate since Firebase doesn't have delete function
+      await handleToggleWorkerStatus(workerId)
     }
   }
 
   const canDeleteWorker = (workerId: string) => {
     const workerShifts = shifts.filter((shift) => shift.workerId === workerId)
     return workerShifts.length === 0
+  }
+
+  const formatDate = (date: Date | string | number) => {
+    if (date instanceof Date) {
+      return date.toLocaleDateString("es-CO")
+    }
+    // Handle Firebase timestamp or string dates
+    return new Date(date).toLocaleDateString("es-CO")
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400">Cargando personal...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -141,7 +186,9 @@ export default function StaffManagement({ onBack }: StaffManagementProps) {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Gestión de Personal</h1>
-                <p className="text-sm text-slate-600 dark:text-slate-400">Administrar trabajadores del sistema</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Administrar trabajadores del sistema - {selectedCasino}
+                </p>
               </div>
             </div>
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -370,8 +417,7 @@ export default function StaffManagement({ onBack }: StaffManagementProps) {
                             {stats.totalRevenue.toLocaleString()}
                           </div>
                           <div>
-                            <span className="font-medium">Fecha Registro:</span>{" "}
-                            {worker.createdAt.toLocaleDateString("es-CO")}
+                            <span className="font-medium">Fecha Registro:</span> {formatDate(worker.createdAt)}
                           </div>
                         </div>
                       </div>
@@ -449,7 +495,7 @@ export default function StaffManagement({ onBack }: StaffManagementProps) {
                   <div className="font-medium mb-2">Información del Empleado:</div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>Estado: {selectedWorker.isActive ? "Activo" : "Inactivo"}</div>
-                    <div>Fecha de Registro: {selectedWorker.createdAt.toLocaleDateString("es-CO")}</div>
+                    <div>Fecha de Registro: {formatDate(selectedWorker.createdAt)}</div>
                   </div>
                 </div>
               </div>

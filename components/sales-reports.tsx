@@ -7,24 +7,33 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { BarChart3, ArrowLeft, TrendingUp, DollarSign, Package, Download } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
-import { getShifts, getBeers } from "@/lib/storage"
+import { getShifts, getBeers, getWorkers } from "@/lib/firebase-storage"
 import type { Shift, Beer, SalesReport } from "@/types"
 
 interface SalesReportsProps {
+  selectedCasino: string
   onBack: () => void
 }
 
-export default function SalesReports({ onBack }: SalesReportsProps) {
+export default function SalesReports({ selectedCasino, onBack }: SalesReportsProps) {
   const [beers, setBeers] = useState<Beer[]>([])
   const [selectedPeriod, setSelectedPeriod] = useState<"today" | "week" | "month" | "all">("today")
   const [reports, setReports] = useState<SalesReport[]>([])
 
   useEffect(() => {
-    const allShifts = getShifts()
-    const allBeers = getBeers()
-    setBeers(allBeers)
-    generateReports(allShifts, allBeers)
-  }, [])
+    const loadData = async () => {
+      try {
+        const allShifts = await getShifts(selectedCasino)
+        const allBeers = await getBeers(selectedCasino)
+        setBeers(allBeers)
+        generateReports(allShifts, allBeers)
+      } catch (error) {
+        console.error("Error loading data:", error)
+      }
+    }
+
+    loadData()
+  }, [selectedCasino])
 
   const generateReports = (allShifts: Shift[], allBeers: Beer[]) => {
     const completedShifts = allShifts.filter((shift) => !shift.isActive && shift.beersSold && shift.expectedCash)

@@ -4,31 +4,52 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Beer, BarChart3, Users, Clock, DollarSign, Package } from "lucide-react"
-import { initializeDefaultData, getBeers, getWorkers, getShifts } from "@/lib/storage"
+import { Beer, BarChart3, Users, Clock, DollarSign, Package, Droplets } from "lucide-react"
+import { getBeers, getWorkers, getShifts } from "@/lib/firebase-storage"
 import type { Beer as BeerType, Worker, Shift } from "@/types"
 import InventoryManagement from "@/components/inventory-management"
 import ShiftManagement from "@/components/shift-management"
 import SalesReports from "@/components/sales-reports"
 import StaffManagement from "@/components/staff-management"
+import { CasinoSelector } from "@/components/casino-selector"
+import { SoftDrinksManagement } from "@/components/soft-drinks-managements"
 
 export default function CasinoBeerSalesPage() {
   const [beers, setBeers] = useState<BeerType[]>([])
   const [workers, setWorkers] = useState<Worker[]>([])
   const [activeShifts, setActiveShifts] = useState<Shift[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
-  const [currentView, setCurrentView] = useState<"dashboard" | "inventory" | "shifts" | "reports" | "staff">(
-    "dashboard",
-  )
+  const [selectedCasino, setSelectedCasino] = useState<string>("")
+  const [currentView, setCurrentView] = useState<
+    "dashboard" | "inventory" | "shifts" | "reports" | "staff" | "soft-drinks"
+  >("dashboard")
 
   useEffect(() => {
-    // Initialize data and load from storage
-    initializeDefaultData()
-    setBeers(getBeers())
-    setWorkers(getWorkers())
-    setActiveShifts(getShifts().filter((shift) => shift.isActive))
-    setIsLoaded(true)
-  }, [])
+    if (selectedCasino) {
+      loadData()
+    }
+  }, [selectedCasino])
+
+  const loadData = async () => {
+    try {
+      const [beersData, workersData, shiftsData] = await Promise.all([
+        getBeers(selectedCasino),
+        getWorkers(selectedCasino),
+        getShifts(selectedCasino),
+      ])
+      setBeers(beersData)
+      setWorkers(workersData)
+      setActiveShifts(shiftsData.filter((shift) => shift.isActive))
+      setIsLoaded(true)
+    } catch (error) {
+      console.error("Error loading data:", error)
+      setIsLoaded(true)
+    }
+  }
+
+  if (!selectedCasino) {
+    return <CasinoSelector onCasinoSelect={setSelectedCasino} />
+  }
 
   if (!isLoaded) {
     return (
@@ -42,19 +63,23 @@ export default function CasinoBeerSalesPage() {
   }
 
   if (currentView === "inventory") {
-    return <InventoryManagement onBack={() => setCurrentView("dashboard")} />
+    return <InventoryManagement selectedCasino={selectedCasino} onBack={() => setCurrentView("dashboard")} />
   }
 
   if (currentView === "shifts") {
-    return <ShiftManagement onBack={() => setCurrentView("dashboard")} />
+    return <ShiftManagement selectedCasino={selectedCasino} onBack={() => setCurrentView("dashboard")} />
   }
 
   if (currentView === "reports") {
-    return <SalesReports onBack={() => setCurrentView("dashboard")} />
+    return <SalesReports selectedCasino={selectedCasino} onBack={() => setCurrentView("dashboard")} />
   }
 
   if (currentView === "staff") {
-    return <StaffManagement onBack={() => setCurrentView("dashboard")} />
+    return <StaffManagement selectedCasino={selectedCasino} onBack={() => setCurrentView("dashboard")} />
+  }
+
+  if (currentView === "soft-drinks") {
+    return <SoftDrinksManagement selectedCasino={selectedCasino} onBack={() => setCurrentView("dashboard")} />
   }
 
   const totalBeers = beers.reduce((sum, beer) => sum + beer.quantity, 0)
@@ -73,12 +98,19 @@ export default function CasinoBeerSalesPage() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Sistema de Ventas Casino</h1>
-                <p className="text-sm text-slate-600 dark:text-slate-400">Gestión de inventario y turnos de cerveza</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  {selectedCasino === "spezia" ? "Spezia" : "Cali Gran Casino"} - Gestión de inventario y turnos
+                </p>
               </div>
             </div>
-            <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-              Sistema Activo
-            </Badge>
+            <div className="flex items-center space-x-2">
+              <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                Sistema Activo
+              </Badge>
+              <Button variant="outline" size="sm" onClick={() => setSelectedCasino("")}>
+                Cambiar Casino
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -136,7 +168,7 @@ export default function CasinoBeerSalesPage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
           <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
@@ -151,6 +183,24 @@ export default function CasinoBeerSalesPage() {
                 onClick={() => setCurrentView("inventory")}
               >
                 Gestionar Inventario
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Droplets className="h-5 w-5 text-cyan-500" />
+                <span>Gaseosas y Jugos</span>
+              </CardTitle>
+              <CardDescription>Administrar inventario de bebidas no alcohólicas</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                className="w-full bg-cyan-500 hover:bg-cyan-600 text-white"
+                onClick={() => setCurrentView("soft-drinks")}
+              >
+                Gestionar Bebidas
               </Button>
             </CardContent>
           </Card>

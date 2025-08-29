@@ -16,14 +16,15 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertTriangle, Package, Plus, Edit, RefreshCw, ArrowLeft } from "lucide-react"
-import { getBeers, saveBeers } from "@/lib/storage"
-import type { Beer } from "@/types"
+import { getBeers, saveBeers, saveRestockRecord } from "@/lib/firebase-storage"
+import type { Beer, RestockRecord } from "@/types"
 
 interface InventoryManagementProps {
+  selectedCasino: string
   onBack: () => void
 }
 
-export default function InventoryManagement({ onBack }: InventoryManagementProps) {
+export default function InventoryManagement({ selectedCasino, onBack }: InventoryManagementProps) {
   const [beers, setBeers] = useState<Beer[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -42,10 +43,19 @@ export default function InventoryManagement({ onBack }: InventoryManagementProps
   })
 
   useEffect(() => {
-    setBeers(getBeers())
-  }, [])
+    loadBeers()
+  }, [selectedCasino])
 
-  const handleAddBeer = () => {
+  const loadBeers = async () => {
+    try {
+      const beersData = await getBeers(selectedCasino)
+      setBeers(beersData)
+    } catch (error) {
+      console.error("Error loading beers:", error)
+    }
+  }
+
+  const handleAddBeer = async () => {
     if (!newBeer.name || newBeer.purchasePrice <= 0) return
 
     const beer: Beer = {
@@ -55,38 +65,53 @@ export default function InventoryManagement({ onBack }: InventoryManagementProps
       purchasePrice: newBeer.purchasePrice,
       sellingPrice: 4000, // Fixed selling price
       lastRestockDate: new Date(),
+      lastRestockWorker: "Sistema", // Default for new beers
       weeklyRestockDay: newBeer.weeklyRestockDay,
     }
 
     const updatedBeers = [...beers, beer]
     setBeers(updatedBeers)
-    saveBeers(updatedBeers)
+    await saveBeers(selectedCasino, updatedBeers)
     setNewBeer({ name: "", quantity: 0, purchasePrice: 0, weeklyRestockDay: "monday" })
     setIsAddDialogOpen(false)
   }
 
-  const handleUpdateBeer = () => {
+  const handleUpdateBeer = async () => {
     if (!selectedBeer) return
 
     const updatedBeers = beers.map((beer) => (beer.id === selectedBeer.id ? selectedBeer : beer))
     setBeers(updatedBeers)
-    saveBeers(updatedBeers)
+    await saveBeers(selectedCasino, updatedBeers)
     setIsEditDialogOpen(false)
     setSelectedBeer(null)
   }
 
-  const handleRestock = (beerId: string, additionalQuantity: number) => {
+  const handleRestock = async (beerId: string, additionalQuantity: number, workerName: string) => {
     const updatedBeers = beers.map((beer) =>
       beer.id === beerId
         ? {
             ...beer,
             quantity: beer.quantity + additionalQuantity,
             lastRestockDate: new Date(),
+            lastRestockWorker: workerName,
           }
         : beer,
     )
     setBeers(updatedBeers)
-    saveBeers(updatedBeers)
+    await saveBeers(selectedCasino, updatedBeers)
+
+    const restockRecord: RestockRecord = {
+      id: Date.now().toString(),
+      type: "beer",
+      beerId: beerId,
+      beerName: beers.find((b) => b.id === beerId)?.name || "",
+      quantityAdded: additionalQuantity,
+      newTotalQuantity: beers.find((b) => b.id === beerId)?.quantity || 0 + additionalQuantity,
+      workerName,
+      date: new Date(),
+    }
+    await saveRestockRecord(selectedCasino, restockRecord)
+
     setIsRestockDialogOpen(false)
     setSelectedBeer(null)
   }
@@ -267,6 +292,11 @@ export default function InventoryManagement({ onBack }: InventoryManagementProps
                         {(beer.sellingPrice - beer.purchasePrice).toLocaleString()}
                       </div>
                     </div>
+                    <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                      <span className="font-medium">Último reabastecimiento:</span>{" "}
+                      {beer.lastRestockDate.toLocaleDateString()}
+                      {beer.lastRestockWorker && <span> por {beer.lastRestockWorker}</span>}
+                    </div>
                   </div>
                   <div className="flex space-x-2">
                     <Button
@@ -375,7 +405,7 @@ export default function InventoryManagement({ onBack }: InventoryManagementProps
           {selectedBeer && (
             <RestockForm
               beer={selectedBeer}
-              onRestock={(quantity) => handleRestock(selectedBeer.id, quantity)}
+              onRestock={(quantity, workerName) => handleRestock(selectedBeer.id, quantity, workerName)}
               onCancel={() => setIsRestockDialogOpen(false)}
             />
           )}
@@ -391,14 +421,15 @@ function RestockForm({
   onCancel,
 }: {
   beer: Beer
-  onRestock: (quantity: number) => void
+  onRestock: (quantity: number, workerName: string) => void
   onCancel: () => void
 }) {
   const [quantity, setQuantity] = useState(0)
+  const [workerName, setWorkerName] = useState("")
 
   const handleSubmit = () => {
-    if (quantity > 0) {
-      onRestock(quantity)
+    if (quantity > 0 && workerName.trim()) {
+      onRestock(quantity, workerName.trim())
     }
   }
 
@@ -409,6 +440,15 @@ function RestockForm({
         <div className="text-sm text-slate-600 dark:text-slate-400">
           Precio de compra: ${beer.purchasePrice.toLocaleString()}
         </div>
+      </div>
+      <div>
+        <Label htmlFor="worker-name">Nombre del Trabajador</Label>
+        <Input
+          id="worker-name"
+          value={workerName}
+          onChange={(e) => setWorkerName(e.target.value)}
+          placeholder="Nombre del trabajador que reabastece"
+        />
       </div>
       <div>
         <Label htmlFor="restock-quantity">Cantidad a Agregar</Label>
@@ -432,7 +472,7 @@ function RestockForm({
       <div className="flex space-x-2">
         <Button
           onClick={handleSubmit}
-          disabled={quantity <= 0}
+          disabled={quantity <= 0 || !workerName.trim()}
           className="flex-1 bg-green-500 hover:bg-green-600 text-white"
         >
           Confirmar Reabastecimiento
