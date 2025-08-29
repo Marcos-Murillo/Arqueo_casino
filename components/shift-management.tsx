@@ -21,7 +21,6 @@ import {
   Square,
   ArrowLeft,
   User,
-  Calendar,
   AlertCircle,
   Banknote,
   DollarSign,
@@ -49,7 +48,6 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
   const [freeBeerData, setFreeBeerData] = useState<Record<string, number>>({})
   const [bonuses, setBonuses] = useState(0)
   const [prizes, setPrizes] = useState(0)
-  const [savedProgress, setSavedProgress] = useState<any>(null)
   const [cashBreakdown, setCashBreakdown] = useState<CashBreakdown>({
     bills: {
       "100000": 0,
@@ -60,17 +58,13 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
       "2000": 0,
       "1000": 0,
     },
-    coins: 0, // Changed to single number instead of object
+    coins: 0,
     nequi: 0,
     billetesVarios: 0,
     bonuses: 0,
     prizes: 0,
     total: 0,
   })
-
-  useEffect(() => {
-    loadData()
-  }, [selectedCasino])
 
   const loadData = async () => {
     try {
@@ -86,6 +80,10 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
       console.error("Error loading data:", error)
     }
   }
+
+  useEffect(() => {
+    loadData()
+  }, [selectedCasino])
 
   const activeShifts = shifts.filter((shift) => shift.isActive)
   const completedShifts = shifts.filter((shift) => !shift.isActive).slice(0, 10)
@@ -113,7 +111,14 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
   }
 
   const saveProgress = () => {
-    const progress = {
+    const progress: {
+      salesData: Record<string, number>
+      freeBeerData: Record<string, number>
+      bonuses: number
+      prizes: number
+      cashBreakdown: CashBreakdown
+      shiftId?: string
+    } = {
       salesData,
       freeBeerData,
       bonuses,
@@ -121,7 +126,6 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
       cashBreakdown,
       shiftId: selectedShift?.id,
     }
-    setSavedProgress(progress)
     localStorage.setItem(`shift_progress_${selectedCasino}_${selectedShift?.id}`, JSON.stringify(progress))
     alert("Progreso guardado exitosamente")
   }
@@ -145,10 +149,8 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
     if (!worker) return
 
     const initialInventory: Record<string, number> = {}
-    let totalInitialInventory = 0
     beers.forEach((beer) => {
       initialInventory[beer.id] = beer.quantity
-      totalInitialInventory += beer.quantity
     })
 
     const newShift: Shift = {
@@ -367,28 +369,6 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
           </Card>
 
           <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">Turnos Hoy</CardTitle>
-              <Calendar className="h-4 w-4 text-slate-600 dark:text-slate-400" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-slate-900 dark:text-white">
-                {
-                  shifts.filter((shift) => {
-                    const today = new Date()
-                    const shiftDate = new Date(shift.startTime)
-                    return shiftDate.toDateString() === today.toDateString()
-                  }).length
-                }
-              </div>
-              <p className="text-xs text-slate-600 dark:text-slate-400">turnos registrados hoy</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Active Shifts */}
-        {activeShifts.length > 0 && (
-          <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 mb-8">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Play className="h-5 w-5 text-green-500" />
@@ -456,7 +436,7 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
               </div>
             </CardContent>
           </Card>
-        )}
+        </div>
 
         {/* Recent Completed Shifts */}
         <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
