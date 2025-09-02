@@ -46,7 +46,6 @@ export interface CashBreakdown {
     "10000": number // 10,000 peso bills
     "5000": number // 5,000 peso bills
     "2000": number // 2,000 peso bills
-    "1000": number // 1,000 peso bills
   }
   coins: number // Total coins amount
   nequi: number // Nequi digital money
