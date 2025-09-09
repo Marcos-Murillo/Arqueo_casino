@@ -50,6 +50,7 @@ export interface CashBreakdown {
   coins: number // Total coins amount
   nequi: number // Nequi digital money
   billetesVarios: number // Various bills
+  completarBase: number
   bonuses: number // Bonuses amount
   prizes: number // Prizes amount
   total: number

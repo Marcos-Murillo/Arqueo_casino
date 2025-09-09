@@ -36,6 +36,7 @@ interface ShiftManagementProps {
   onBack: () => void
 }
 
+
 export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagementProps) {
   const [shifts, setShifts] = useState<Shift[]>([])
   const [workers, setWorkers] = useState<Worker[]>([])
@@ -60,6 +61,7 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
     coins: 0,
     nequi: 0,
     billetesVarios: 0,
+    completarBase: 0,
     bonuses: 0,
     prizes: 0,
     total: 0,
@@ -93,7 +95,7 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
       0,
     )
     return (
-      billsTotal + breakdown.coins + breakdown.nequi + breakdown.billetesVarios + breakdown.bonuses + breakdown.prizes
+      billsTotal + breakdown.coins + breakdown.nequi + breakdown.billetesVarios + breakdown.bonuses + breakdown.prizes +breakdown.completarBase
     )
   }
 
@@ -236,6 +238,7 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
       coins: 0,
       nequi: 0,
       billetesVarios: 0,
+      completarBase: 0,
       bonuses: 0,
       prizes: 0,
       total: 0,
@@ -255,6 +258,22 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
       minute: "2-digit",
     })
   }
+
+// La función para formatear números
+const formatNumber = (numStr: string) => {
+  const numericString = numStr.replace(/\D/g, "");
+  return new Intl.NumberFormat("de-DE").format(Number(numericString) || 0);
+};
+
+// Función para manejar cambio con setter explícito
+const handleNumberChange = (
+  e: React.ChangeEvent<HTMLInputElement>,
+  setter: React.Dispatch<React.SetStateAction<number>>
+) => {
+  const rawValue = e.target.value;
+  const numericValue = parseInt(rawValue.replace(/\D/g, ""), 10) || 0;
+  setter(numericValue);
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -388,7 +407,7 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
                           En Curso
                         </Badge>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2 text-sm text-slate-600 dark:text-slate-400">
+                      <div className="grid grid-cols-1 gap-4 mt-2 text-sm text-slate-600 dark:text-slate-400">
                         <div>
                           <span className="font-medium">Entrada:</span> {formatTime(shift.startTime)}
                         </div>
@@ -488,16 +507,14 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
 
       {/* End Shift Dialog */}
       <Dialog open={isEndShiftDialogOpen} onOpenChange={setIsEndShiftDialogOpen}>
-        <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
+        <DialogContent style={{ maxWidth: '70vw' }} className=" max-h-[95vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle>Finalizar Turno - Arqueo Completo</DialogTitle>
             <DialogDescription>
               Registra las ventas y cuenta el efectivo del turno de {selectedShift?.workerName}
             </DialogDescription>
-          </DialogHeader>
-          {selectedShift && (
-            <div className="space-y-6">
-              <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg">
+            {selectedShift && (
+            <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg">
                 <div className="text-sm text-slate-600 dark:text-slate-400">
                   <div className="font-medium mb-2">Información del Turno:</div>
                   <div className="grid grid-cols-2 gap-4">
@@ -511,294 +528,331 @@ export default function ShiftManagement({ selectedCasino, onBack }: ShiftManagem
                   </div>
                 </div>
               </div>
-
-              <div>
-                <Label className="text-base font-medium">Registrar Ventas por Cerveza</Label>
-                <div className="space-y-4 mt-4">
-                  {beers.map((beer) => {
-                    const initialQty = selectedShift.initialInventory[beer.id] || 0
-                    const soldQty = salesData[beer.id] || 0
-                    const freeQty = freeBeerData[beer.id] || 0
-                    const remainingQty = initialQty - soldQty - freeQty
-
-                    return (
-                      <div key={beer.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-medium text-slate-900 dark:text-white">{beer.name}</h4>
-                          <Badge variant="outline">Stock inicial: {initialQty}</Badge>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                          <div>
-                            <Label htmlFor={`sold-${beer.id}`}>Cervezas Vendidas</Label>
-                            <Input
-                              id={`sold-${beer.id}`}
-                              type="number"
-                              min="0"
-                              max={initialQty}
-                              value={soldQty}
-                              onChange={(e) =>
-                                setSalesData({
-                                  ...salesData,
-                                  [beer.id]: Math.min(Number.parseInt(e.target.value) || 0, initialQty),
-                                })
-                              }
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor={`free-${beer.id}`}>Cervezas Regaladas</Label>
-                            <Input
-                              id={`free-${beer.id}`}
-                              type="number"
-                              min="0"
-                              max={initialQty - soldQty}
-                              value={freeQty}
-                              onChange={(e) =>
-                                setFreeBeerData({
-                                  ...freeBeerData,
-                                  [beer.id]: Math.min(Number.parseInt(e.target.value) || 0, initialQty - soldQty),
-                                })
-                              }
-                            />
-                          </div>
-                          <div className="flex items-end">
-                            <div className="text-sm text-slate-600 dark:text-slate-400">
-                              <div>Stock restante: {remainingQty}</div>
-                              <div>Ingresos: ${(soldQty * beer.sellingPrice).toLocaleString()}</div>
-                            </div>
-                          </div>
-                          {remainingQty < 0 && (
-                            <div className="flex items-center text-red-600 dark:text-red-400">
-                              <AlertCircle className="h-4 w-4 mr-1" />
-                              <span className="text-sm">Cantidad inválida</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="bonuses" className="text-base font-medium flex items-center">
-                    <Award className="h-4 w-4 mr-2" />
-                    Bonos
-                  </Label>
-                  <Input
-                    id="bonuses"
-                    type="number"
-                    min="0"
-                    value={bonuses}
-                    onChange={(e) => setBonuses(Number.parseInt(e.target.value) || 0)}
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="prizes" className="text-base font-medium flex items-center">
-                    <Gift className="h-4 w-4 mr-2" />
-                    Premios
-                  </Label>
-                  <Input
-                    id="prizes"
-                    type="number"
-                    min="0"
-                    value={prizes}
-                    onChange={(e) => setPrizes(Number.parseInt(e.target.value) || 0)}
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-
-              <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
-                <div className="flex items-center space-x-2 mb-4">
-                  <DollarSign className="h-5 w-5 text-green-600" />
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Conteo de Efectivo</h3>
-                </div>
-
-                {/* Bills Section */}
-                <div className="mb-6">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <Banknote className="h-5 w-5 text-green-600" />
-                    <h4 className="text-base font-medium text-slate-900 dark:text-white">Billetes</h4>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {Object.entries(cashBreakdown.bills).map(([denomination, quantity]) => (
-                      <div key={denomination} className="space-y-2">
-                        <Label htmlFor={`bill-${denomination}`} className="text-sm font-medium">
-                          ${Number.parseInt(denomination).toLocaleString()}
-                        </Label>
-                        <Input
-                          id={`bill-${denomination}`}
-                          type="number"
-                          min="0"
-                          value={quantity}
-                          onChange={(e) =>
-                            updateCashBreakdown("bills", denomination, Number.parseInt(e.target.value) || 0)
-                          }
-                          className="text-center"
-                        />
-                        <div className="text-xs text-slate-500 text-center">
-                          ${(Number.parseInt(denomination) * quantity).toLocaleString()}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mb-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="coins" className="text-base font-medium">
-                      Monedas (Total)
-                    </Label>
-                    <Input
-                      id="coins"
-                      type="number"
-                      min="0"
-                      value={cashBreakdown.coins}
-                      onChange={(e) => {
-                        const newBreakdown = {
-                          ...cashBreakdown,
-                          coins: Number.parseInt(e.target.value) || 0,
-                        }
-                        newBreakdown.total = calculateTotal(newBreakdown)
-                        setCashBreakdown(newBreakdown)
-                      }}
-                      className="text-center"
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-
-                {/* Other Payment Methods */}
-                <div className="mb-6">
-                  <div className="flex items-center space-x-2 mb-4">
-                    <DollarSign className="h-5 w-5 text-blue-600" />
-                    <h4 className="text-base font-medium text-slate-900 dark:text-white">Otros Medios de Pago</h4>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="nequi" className="text-sm font-medium">
-                        Nequi
-                      </Label>
-                      <Input
-                        id="nequi"
-                        type="number"
-                        min="0"
-                        value={cashBreakdown.nequi}
-                        onChange={(e) => {
-                          const newBreakdown = {
-                            ...cashBreakdown,
-                            nequi: Number.parseInt(e.target.value) || 0,
-                          }
-                          newBreakdown.total = calculateTotal(newBreakdown)
-                          setCashBreakdown(newBreakdown)
-                        }}
-                        className="text-center"
-                        placeholder="0"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="billetes-varios" className="text-sm font-medium">
-                        Billetes Varios
-                      </Label>
-                      <Input
-                        id="billetes-varios"
-                        type="number"
-                        min="0"
-                        value={cashBreakdown.billetesVarios}
-                        onChange={(e) => {
-                          const newBreakdown = {
-                            ...cashBreakdown,
-                            billetesVarios: Number.parseInt(e.target.value) || 0,
-                          }
-                          newBreakdown.total = calculateTotal(newBreakdown)
-                          setCashBreakdown(newBreakdown)
-                        }}
-                        className="text-center"
-                        placeholder="0"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Summary Section */}
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                <div className="text-sm text-blue-800 dark:text-blue-200">
-                  <div className="font-medium mb-2">Resumen del Turno:</div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>Total vendido: {Object.values(salesData).reduce((sum, qty) => sum + qty, 0)} cervezas</div>
-                    <div>Total regalado: {Object.values(freeBeerData).reduce((sum, qty) => sum + qty, 0)} cervezas</div>
-                    <div>Bonos: ${bonuses.toLocaleString()}</div>
-                    <div>Premios: ${prizes.toLocaleString()}</div>
-                    <div>
-                      Efectivo esperado: $
-                      {beers
-                        .reduce((sum, beer) => sum + (salesData[beer.id] || 0) * beer.sellingPrice, 0)
-                        .toLocaleString()}
-                    </div>
-                    <div>Total contado: ${calculateTotal({ ...cashBreakdown, bonuses, prizes }).toLocaleString()}</div>
-                  </div>
-
-                  {/* Base Amount Comparison */}
-                  <div className="mt-4 p-3 rounded-lg border-2 border-dashed">
-                    {(() => {
-                      const baseAmount = 10000000
-                      const totalCounted = calculateTotal({ ...cashBreakdown, bonuses, prizes })
-                      const difference = totalCounted - baseAmount
-
-                      if (difference === 0) {
-                        return (
-                          <div className="text-green-600 dark:text-green-400 font-medium text-center">
-                            ✓ Cantidad exacta en base: $10,000,000
-                          </div>
-                        )
-                      } else if (difference < 0) {
-                        return (
-                          <div className="text-red-600 dark:text-red-400 font-medium text-center">
-                            Hace falta dinero: ${Math.abs(difference).toLocaleString()}
-                          </div>
-                        )
-                      } else {
-                        return (
-                          <div className="text-green-600 dark:text-green-400 font-medium text-center">
-                            -_- Hay más dinero: +${difference.toLocaleString()}
-                          </div>
-                        )
-                      }
-                    })()}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex space-x-2">
-                <Button
-                  onClick={saveProgress}
-                  variant="outline"
-                  className="flex-1 bg-amber-50 hover:bg-amber-100 border-amber-200"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  Guardar Avances de Arqueo
-                </Button>
-                <Button
-                  onClick={handleEndShift}
-                  disabled={Object.values(salesData).some((qty, index) => {
-                    const beer = beers[index]
-                    const initialQty = selectedShift.initialInventory[beer.id] || 0
-                    const freeQty = freeBeerData[beer.id] || 0
-                    return qty + freeQty > initialQty
-                  })}
-                  className="flex-1 bg-red-500 hover:bg-red-600 text-white"
-                >
-                  Finalizar Turno y Guardar Conteo
-                </Button>
-                <Button variant="outline" onClick={() => setIsEndShiftDialogOpen(false)} className="flex-1">
-                  Cancelar
-                </Button>
-              </div>
-            </div>
           )}
+          </DialogHeader>
+            {selectedShift && (
+              <div className="flex flex-row gap-6 max-w-full max-h-[95vh] overflow-y-auto p-4">
+                {/* Columna 1: Ventas + Bonos y Premios */}
+                <div className="flex-1 flex flex-col space-y-6">
+                  {/* Registro de Ventas */}
+                  <div>
+                    <Label className="text-base font-medium">Registrar Ventas por Cerveza</Label>
+                    <div className="space-y-4 mt-4">
+                      {beers.map((beer) => {
+                        const initialQty = selectedShift.initialInventory[beer.id] || 0
+                        const soldQty = salesData[beer.id] || 0
+                        const freeQty = freeBeerData[beer.id] || 0
+                        const remainingQty = initialQty - soldQty - freeQty
+            
+                        return (
+                          <div key={beer.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-medium text-slate-900 dark:text-white">{beer.name}</h4>
+                              <Badge variant="outline">Stock inicial: {initialQty}</Badge>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                              <div>
+                                <Label htmlFor={`sold-${beer.id}`}>Cervezas Vendidas</Label>
+                                <Input
+                                  id={`sold-${beer.id}`}
+                                  type="number"
+                                  min="0"
+                                  max={initialQty}
+                                  value={soldQty === 0 ? "" : soldQty}
+                                  onChange={(e) =>
+                                    setSalesData({
+                                      ...salesData,
+                                      [beer.id]: Math.min(Number.parseInt(e.target.value) || 0, initialQty),
+                                    })
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor={`free-${beer.id}`}>Cervezas Regaladas</Label>
+                                <Input
+                                  id={`free-${beer.id}`}
+                                  type="number"
+                                  min="0"
+                                  max={initialQty - soldQty}
+                                  value={freeQty === 0 ? "" : freeQty}
+                                  onChange={(e) =>
+                                    setFreeBeerData({
+                                      ...freeBeerData,
+                                      [beer.id]: Math.min(Number.parseInt(e.target.value) || 0, initialQty - soldQty),
+                                    })
+                                  }
+                                />
+                              </div>
+                              <div className="flex items-end">
+                                <div className="text-sm text-slate-600 dark:text-slate-400">
+                                  <div>Stock restante: {remainingQty}</div>
+                                  <div>Ingresos: ${(soldQty * beer.sellingPrice).toLocaleString()}</div>
+                                </div>
+                              </div>
+                              {remainingQty < 0 && (
+                                <div className="flex items-center text-red-600 dark:text-red-400">
+                                  <AlertCircle className="h-4 w-4 mr-1" />
+                                  <span className="text-sm">Cantidad inválida</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+            
+                  {/* Bonos y Premios */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="bonuses" className="text-base font-medium flex items-center">
+                        <Award className="h-4 w-4 mr-2" />
+                        Bonos
+                      </Label>
+                      <Input
+                        id="bonuses"
+                        type="text"
+                        min="0"
+                        value={bonuses === 0 ? "" : formatNumber(String(bonuses))}
+                        onChange={(e) => {
+                         const raw = e.target.value.replace(/\D/g, "");
+                         const num = raw === "" ? 0 : parseInt(raw, 10); 
+                         setBonuses(num);
+                         }}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="prizes" className="text-base font-medium flex items-center">
+                        <Gift className="h-4 w-4 mr-2" />
+                        Premios
+                      </Label>
+                      <Input
+                        id="prizes"
+                        type="text"
+                        min="0"
+                        value={prizes === 0 ? "" : formatNumber(String(prizes))}
+                        onChange={(e) => {
+                         const raw = e.target.value.replace(/\D/g, "");
+                         const num = raw === "" ? 0 : parseInt(raw, 10); 
+                         setPrizes(num);
+                         }}
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                </div>
+            
+                {/* Columna 2: Conteo efectivo, monedas y otros pagos */}
+                <div className="flex-1 flex flex-col space-y-6 border-l border-r border-slate-300 dark:border-slate-700 px-4">
+                  {/* Conteo Efectivo */}
+                  <div>
+                    <div className="flex items-center space-x-2 mb-4">
+                      <DollarSign className="h-5 w-5 text-green-600" />
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Conteo de Efectivo</h3>
+                    </div>
+            
+                    {/* Billetes */}
+                    <div className="mb-6">
+                      <div className="flex items-center space-x-2 mb-4">
+                        <Banknote className="h-5 w-5 text-green-600" />
+                        <h4 className="text-base font-medium text-slate-900 dark:text-white">Billetes</h4>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {Object.entries(cashBreakdown.bills).map(([denomination, quantity]) => (
+                          <div key={denomination} className="space-y-2">
+                            <Label htmlFor={`bill-${denomination}`} className="text-sm font-medium">
+                              ${Number.parseInt(denomination).toLocaleString()}
+                            </Label>
+                            <Input
+                              id={`bill-${denomination}`}
+                              type="number"
+                              min="0"
+                              value={quantity === 0 ? "" : quantity}
+                              onChange={(e) =>
+                                updateCashBreakdown("bills", denomination, Number.parseInt(e.target.value) || 0)
+                              }
+                              className="text-center"
+                            />
+                            <div className="text-xs text-slate-500 text-center">
+                              ${(Number.parseInt(denomination) * quantity).toLocaleString()}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+            
+                    {/* Monedas */}
+                    <div className="mb-6 space-y-2">
+                      <Label htmlFor="coins" className="text-base font-medium">
+                        Monedas (Total)
+                      </Label>
+                      <Input
+                        id="coins"
+                        type="text"
+                        value={cashBreakdown.coins === 0 ? "" : formatNumber(String(cashBreakdown.coins))}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/\D/g, "");
+                          const num = raw === "" ? 0 : parseInt(raw, 10);
+                          setCashBreakdown({ ...cashBreakdown, coins: num });
+                        }}
+                        className="text-center"
+                        placeholder="0"
+                      />
+                    </div>
+            
+                    {/* Otros Medios de Pago */}
+                    <div>
+                      <div className="flex items-center space-x-2 mb-4">
+                        <DollarSign className="h-5 w-5 text-blue-600" />
+                        <h4 className="text-base font-medium text-slate-900 dark:text-white">Otros Medios de Pago</h4>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="nequi" className="text-sm font-medium">
+                            Nequi
+                          </Label>
+                          <Input
+                            id="nequi"
+                            type="text"
+                            value={cashBreakdown.nequi === 0 ? "" : formatNumber(String(cashBreakdown.nequi))}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/\D/g, "")
+                              const num = raw === "" ? 0 : parseInt(raw, 10)
+                              const newBreakdown = { ...cashBreakdown, nequi: num }
+                              newBreakdown.total = calculateTotal(newBreakdown)
+                              setCashBreakdown(newBreakdown)
+                            }}
+                            className="text-center"
+                            placeholder="0"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="billetes-varios" className="text-sm font-medium">
+                            Billetes Varios
+                          </Label>
+                          <Input
+                            id="billetes-varios"
+                            type="text"
+                            min="0"
+                            value={cashBreakdown.billetesVarios === 0 ? "" : formatNumber(String(cashBreakdown.billetesVarios))}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/\D/g, "")
+                              const num = raw === "" ? 0 : parseInt(raw, 10)
+                              const newBreakdown = { ...cashBreakdown, nequi: num }
+                              newBreakdown.total = calculateTotal(newBreakdown)
+                              setCashBreakdown(newBreakdown)
+                            }}
+                            className="text-center"
+                            placeholder="0"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="completar-base" className="text-sm font-medium">
+                            Completar Base
+                          </Label>
+                          <Input
+                            id="completar-base"
+                            type="text"
+                            min="0"
+                            value={cashBreakdown.completarBase === 0 ? "" : formatNumber(String(cashBreakdown.completarBase))}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/\D/g, "")
+                              const num = raw === "" ? 0 : parseInt(raw, 10)
+                              const newBreakdown = { ...cashBreakdown, nequi: num }
+                              newBreakdown.total = calculateTotal(newBreakdown)
+                              setCashBreakdown(newBreakdown)
+                            }}
+                            className="text-center"
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+            
+                {/* Columna 3: Resumen y Botones */}
+                <div className="flex-1 flex flex-col justify-between space-y-6">
+                  {/* Resumen del Turno */}
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                    <div className="text-sm text-blue-800 dark:text-blue-200">
+                      <div className="font-medium mb-2">Resumen del Turno:</div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>Total vendido: {Object.values(salesData).reduce((sum, qty) => sum + qty, 0)} cervezas</div>
+                        <div>Total regalado: {Object.values(freeBeerData).reduce((sum, qty) => sum + qty, 0)} cervezas</div>
+                        <div>Bonos: ${bonuses.toLocaleString()}</div>
+                        <div>Premios: ${prizes.toLocaleString()}</div>
+                        <div>
+                          Efectivo esperado: $
+                          {beers.reduce((sum, beer) => sum + (salesData[beer.id] || 0) * beer.sellingPrice, 0).toLocaleString()}
+                        </div>
+                        <div>Total contado: ${calculateTotal({ ...cashBreakdown, bonuses, prizes }).toLocaleString()}</div>
+                      </div>
+            
+                      <div className="mt-4 p-3 rounded-lg border-2 border-dashed">
+                        {(() => {
+                          const baseAmount = 10000000
+                          const totalCounted = calculateTotal({ ...cashBreakdown, bonuses, prizes })
+                          const difference = totalCounted - baseAmount
+            
+                          if (difference === 0) {
+                            return (
+                              <div className="text-green-600 dark:text-green-400 font-medium text-center">
+                                ✓ Cantidad exacta en base: $10,000,000
+                              </div>
+                            )
+                          } else if (difference < 0) {
+                            return (
+                              <div className="text-red-600 dark:text-red-400 font-medium text-center">
+                                Hace falta dinero: ${Math.abs(difference).toLocaleString()}
+                              </div>
+                            )
+                          } else {
+                            return (
+                              <div className="text-green-600 dark:text-green-400 font-medium text-center">
+                                -_- Hay más dinero: +${difference.toLocaleString()}
+                              </div>
+                            )
+                          }
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+            
+                  {/* Botones */}
+                  <div className="flex flex-col space-y-2">
+                    <Button
+                      onClick={saveProgress}
+                      variant="outline"
+                      className="bg-amber-50 hover:bg-amber-100 border-amber-200 py-1 text-sm"
+                    >
+                      <Save className="h-4 w-4 mr-1" />
+                      Guardar Avances de Arqueo
+                    </Button>
+                    <Button
+                      onClick={handleEndShift}
+                      disabled={Object.values(salesData).some((qty, index) => {
+                        const beer = beers[index]
+                        const initialQty = selectedShift.initialInventory[beer.id] || 0
+                        const freeQty = freeBeerData[beer.id] || 0
+                        return qty + freeQty > initialQty
+                      })}
+                      className="bg-red-500 hover:bg-red-600 text-white py-1 text-sm"
+                    >
+                      Finalizar Turno y Guardar Conteo
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsEndShiftDialogOpen(false)}
+                      className="py-1 text-sm"
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
         </DialogContent>
       </Dialog>
     </div>
